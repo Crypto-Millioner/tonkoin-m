@@ -1,0 +1,17 @@
+{
+  "name": "tonbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "level": "^10.0.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "tonweb": "^0.0.66"
+  }
+}
