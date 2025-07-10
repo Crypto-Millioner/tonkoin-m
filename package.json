@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "express": "^5.1.0",
     "level": "^10.0.0",
     "node-telegram-bot-api": "^0.66.0",
     "tonweb": "^0.0.66"
