@@ -683,18 +683,33 @@ setInterval(async () => {
     } catch (e) {
         console.error('Mining interval error:', e);
     }
-}, 30000); // Проверка каждые 30 секунд
+}, 30000); 
 
 console.log('🤖 Бот запущен!');
 
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
+// Обработчик ошибок polling
+bot.on('polling_error', (error) => {
+  console.error(`[POLLING ERROR] ${error.code} - ${error.message}`);
+  // Перезапускаем polling через 5 секунд
+  setTimeout(() => {
+    console.log("🔄 Restarting polling...");
+    bot.startPolling();
+  }, 5000);
+});
+
+// Запуск веб-сервера (для health checks)
 app.get('/', (req, res) => {
   res.send('🤖 Bot is running');
 });
 
-app.listen(port, () => {
-  console.log(`Web server listening on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`🌐 Web server listening on port ${PORT}`);
 });
+
+setInterval(() => {
+  console.log('❤️ Health check passed');
+}, 300000);
