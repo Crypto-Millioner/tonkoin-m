@@ -1,9 +1,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 const db = require('./database');
-const ton = require('./ton');
 require('dotenv').config();
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.BOT_TOKEN);
 const ADMIN_ID = 2109063524;
 const PAYMENT_ADDRESS = 'UQD8DLY30eWms-ff-YvfH-LyhrF8Ja3oSR2Imt1I51RKrwio';
 const CHANNELS = [
@@ -660,56 +659,6 @@ async function checkPaymentWithRetry(userId, attempts) {
     }, 60000);
 }
 
-// Запуск майнинг-таймера
-setInterval(async () => {
-    try {
-        const users = await db.getAllUsers();
-        const now = Date.now();
-        
-        for (const user of users) {
-            if (user.miningActive) {
-                const timeDiff = (now - user.lastMiningUpdate) / 1000;
-                const cycles = Math.floor(timeDiff / 5);
-                
-                if (cycles > 0) {
-                    const earned = cycles * user.miningRate;
-                    await db.updateUser(user.id, (u) => {
-                        u.miningBalance += earned;
-                        u.lastMiningUpdate = now;
-                    });
-                }
-            }
-        }
-    } catch (e) {
-        console.error('Mining interval error:', e);
-    }
-}, 30000); 
-
 console.log('🤖 Бот запущен!');
 
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 10000;
-
-// Обработчик ошибок polling
-bot.on('polling_error', (error) => {
-  console.error(`[POLLING ERROR] ${error.code} - ${error.message}`);
-  // Перезапускаем polling через 5 секунд
-  setTimeout(() => {
-    console.log("🔄 Restarting polling...");
-    bot.startPolling();
-  }, 5000);
-});
-
-// Запуск веб-сервера (для health checks)
-app.get('/', (req, res) => {
-  res.send('🤖 Bot is running');
-});
-
-app.listen(PORT, () => {
-  console.log(`🌐 Web server listening on port ${PORT}`);
-});
-
-setInterval(() => {
-  console.log('❤️ Health check passed');
-}, 300000);
+module.exports = bot;
