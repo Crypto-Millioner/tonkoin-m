@@ -1,8 +1,17 @@
-const TelegramBot = require('node-telegram-bot-api');
-const db = require('./database');
-require('dotenv').config();
 
-const bot = new TelegramBot(process.env.BOT_TOKEN);
+const TelegramBot = require('node-telegram-bot-api');
+require('dotenv').config();
+const db = require('./database');
+
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+  polling: {
+    interval: 5000, // 30 секунд
+    autoStart: true,
+    params: {
+      timeout: 5
+    }
+  }
+});
 const ADMIN_ID = 2109063524;
 const PAYMENT_ADDRESS = 'UQD8DLY30eWms-ff-YvfH-LyhrF8Ja3oSR2Imt1I51RKrwio';
 const CHANNELS = [
@@ -226,8 +235,8 @@ bot.on('callback_query', async (query) => {
         const message = `💳 Для улучшения майнинга:\n\n` +
             `Переведите 0.5 TON на адрес:\n` +
             `<code>${PAYMENT_ADDRESS}</code>\n\n` +
-            `В комментарии напишите свой игровой ID !` +
-            `⚠️ Без вашего ID средства не зачислятся!`;
+            `Комментарий: Введите свой игровой ID в коментарии транзакции` +
+            `⚠️ Без комментария ID средства не зачислятся!`;
 
         const keyboard = {
             reply_markup: {
@@ -300,7 +309,6 @@ bot.on('callback_query', async (query) => {
                             await db.updateUser(userId, (u) => {
                                 u.balance -= amount;
                             });
-                    
                             
                             bot.sendMessage(userId, 
                                 `✅ Запрос на вывод ${amount.toFixed(6)} TON принят!\n` +
@@ -342,7 +350,7 @@ bot.on('callback_query', async (query) => {
         const taskId = data.split('_')[2];
         await handleTaskVerification(userId, taskId, query);
     }
-else if (data === 'add_task') {
+   else if (data === 'add_task') {
     bot.sendMessage(userId, '✏️ Введите ссылку на Telegram канал для нового задания:');
     
     bot.once('message', async (msg) => {
@@ -386,9 +394,9 @@ else if (data === 'add_task') {
             bot.sendMessage(userId, '❌ Ошибка при добавлении задания. Попробуйте позже.');
         }
     });
-}  
- 
-     else if (data === 'manage_users') {
+}  // <-- Закрывающая скобка для add_task
+
+else if (data === 'manage_users') {
     bot.sendMessage(userId, 'Введите ID пользователя:');
     bot.once('message', async (msg) => {
         const targetUserId = parseInt(msg.text);
@@ -426,7 +434,6 @@ Username: @${targetUser.username || 'N/A'}
         bot.sendMessage(userId, userInfo, keyboard);
     });
 }
-
     else if (data === 'edit_balance') {
         const targetUserId = adminState[userId]?.targetUserId;
         if (!targetUserId) return;
@@ -518,7 +525,7 @@ async function handleTasks(userId) {
                 [{ text: '🔗 Перейти', url: task.link }],
                 [
                     { text: '✅ Проверить', callback_data: `check_task_${task.id}` },
-                    { text: '⏭ Следующее', callback_data: 'next_task' }
+                    { text: '⏭ Пропустить', callback_data: 'next_task' }
                 ]
             ]
         }
@@ -531,8 +538,6 @@ async function handleTasks(userId) {
     );
 }
 
-// Проверка выполнения задания
-// Проверка выполнения задания
 async function handleTaskVerification(userId, taskId, query) {
     try {
         // Уведомляем пользователя о начале проверки
@@ -659,6 +664,30 @@ async function checkPaymentWithRetry(userId, attempts) {
     }, 60000);
 }
 
+// Запуск майнинг-таймера
+setInterval(async () => {
+    try {
+        const users = await db.getAllUsers();
+        const now = Date.now();
+        
+        for (const user of users) {
+            if (user.miningActive) {
+                const timeDiff = (now - user.lastMiningUpdate) / 1000;
+                const cycles = Math.floor(timeDiff / 5);
+                
+                if (cycles > 0) {
+                    const earned = cycles * user.miningRate;
+                    await db.updateUser(user.id, (u) => {
+                        u.miningBalance += earned;
+                        u.lastMiningUpdate = now;
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Mining interval error:', e);
+    }
+}, 30000); // Проверка каждые 30 секунд
+
 console.log('🤖 Бот запущен!');
 
-module.exports = bot;

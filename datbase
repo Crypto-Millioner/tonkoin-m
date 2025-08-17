@@ -1,3 +1,128 @@
+const { Level } = require('level');
+const path = require('path');
+
+const dbPath = path.join(__dirname, 'tonkoin-db');
+const db = new Level(dbPath, { valueEncoding: 'json' });
+
+class Database {
+    // Пользователи
+    async getUser(userId) {
+        try {
+            return await db.get(`user_${userId}`);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async saveUser(user) {
+        await db.put(`user_${user.id}`, user);
+    }
+
+async findUserByUsername(username) {
+    const users = [];
+    for await (const [key, value] of db.iterator()) {
+        if (key.startsWith('user_')) {
+            const user = JSON.parse(value);
+            if (user.username && user.username.toLowerCase() === username.toLowerCase()) {
+                users.push(user);
+            }
+        }
+    }
+    return users;
+}
+
+    async updateUser(userId, updateFn) {
+        const user = await this.getUser(userId) || {
+            id: userId,
+            balance: 0,
+            miningBalance: 0,
+            miningRate: 0.0000001000,
+            upgraded: false,
+            miningActive: false,
+            tasksCompleted: [],
+            lastMiningUpdate: Date.now()
+        };
+        
+        updateFn(user);
+        await this.saveUser(user);
+        return user;
+    }
+
+    // Рефералы
+    async addReferral(inviterId, referralId) {
+        const key = `ref_${inviterId}_${referralId}`;
+        await db.put(key, '1');
+    }
+
+    async getReferralsCount(userId) {
+        let count = 0;
+        for await (const [key] of db.keys({ 
+            gte: `ref_${userId}_`, 
+            lte: `ref_${userId}_\xff` 
+        })) {
+            count++;
+        }
+        return count;
+    }
+
+    // Задания
+    async addTask(task) {
+        const tasks = await this.getTasks();
+        tasks.push(task);
+        await db.put('tasks', tasks);
+    }
+
+    async getTasks() {
+        try {
+            return await db.get('tasks') || [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Получение всех пользователей
+    async getAllUsers() {
+        const users = [];
+        for await (const [key, value] of db.iterator({ 
+            gt: 'user_', 
+            lte: 'user_\xff' 
+        })) {
+            users.push(value);
+        }
+        return users;
+    }
+}
+
+module.exports = new Database();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -275,92 +400,74 @@
   </div>
 
   <script>
-  // Обновляем URL WebSocket
-  const ws = new WebSocket(`ws://localhost:3001`);
-  
-  // Состояние данных
-  let currentData = {
-    users: [],
-    referrals: [],
-    tasks: []
-  };
-
-  ws.onmessage = (event) => {
-    try {
+    const ws = new WebSocket(`ws://${window.location.hostname}:3000`);
+    
+    ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      currentData = {
-        users: data.users || [],
-        referrals: data.referrals || [],
-        tasks: data.tasks || []
-      };
-      updateUI();
-    } catch (e) {
-      console.error('Ошибка обработки данных:', e);
+      updateUI(data);
+      document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
+    };
+    
+    function updateUI(data) {
+      // Обновляем статистику
+      document.getElementById('users-count').textContent = data.users.length;
+      document.getElementById('referrals-count').textContent = data.referrals.length;
+      document.getElementById('tasks-count').textContent = data.tasks.length;
+      
+      // Обновляем таблицу пользователей
+      const usersTable = document.querySelector('#users-table tbody');
+      usersTable.innerHTML = data.users.map(user => `
+        <tr>
+          <td>${user.id}</td>
+          <td>${user.balance?.toFixed(8) || 0}</td>
+          <td>
+            <span class="badge ${user.miningActive ? 'badge-success' : 'badge-warning'}">
+              ${user.miningActive ? 'Активен' : 'Неактивен'}
+            </span>
+          </td>
+          <td>
+            <div class="status">
+              <i class="fas ${user.upgraded ? 'fa-crown' : 'fa-user'} ${user.upgraded ? 'online' : 'offline'}"></i>
+              ${user.upgraded ? 'Premium' : 'Basic'}
+            </div>
+          </td>
+          <td>${new Date(user.lastMiningUpdate || Date.now()).toLocaleString()}</td>
+        </tr>
+      `).join('');
+      
+      // Обновляем таблицу рефералов
+      const referralsTable = document.querySelector('#referrals-table tbody');
+      referralsTable.innerHTML = data.referrals.map(ref => `
+        <tr>
+          <td>${ref.inviterId}</td>
+          <td>${ref.referralId}</td>
+          <td>${new Date().toLocaleDateString()}</td>
+        </tr>
+      `).join('');
+      
+      // Обновляем таблицу заданий
+      const tasksTable = document.querySelector('#tasks-table tbody');
+      tasksTable.innerHTML = data.tasks.map(task => `
+        <tr>
+          <td>${task.id || '--'}</td>
+          <td>${task.name || 'Неизвестно'}</td>
+          <td>
+            <span class="badge ${task.completed ? 'badge-success' : 'badge-warning'}">
+              ${task.completed ? 'Выполнено' : 'В процессе'}
+            </span>
+          </td>
+        </tr>
+      `).join('');
     }
-    document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
-  };
-  
-  function updateUI() {
-    // Обновляем статистику
-    document.getElementById('users-count').textContent = currentData.users.length;
-    document.getElementById('referrals-count').textContent = currentData.referrals.reduce((sum, r) => sum + (r.referralCount || r.count || 0), 0);
-    document.getElementById('tasks-count').textContent = currentData.tasks.length;
     
-    // Обновляем таблицу пользователей
-    const usersTable = document.querySelector('#users-table tbody');
-    usersTable.innerHTML = currentData.users.slice(0, 100).map(user => `
-      <tr>
-        <td>${user.id || '--'}</td>
-        <td>${(user.balance || 0).toFixed(6)}</td>
-        <td>
-          <span class="badge ${user.miningActive ? 'badge-success' : 'badge-warning'}">
-            ${user.miningActive ? 'Активен' : 'Неактивен'}
-          </span>
-        </td>
-        <td>
-          <div class="status">
-            <i class="fas ${user.upgraded ? 'fa-crown' : 'fa-user'} ${user.upgraded ? 'online' : 'offline'}"></i>
-            ${user.upgraded ? 'Premium' : 'Basic'}
-          </div>
-        </td>
-        <td>${new Date(user.lastMiningUpdate || Date.now()).toLocaleString()}</td>
-      </tr>
-    `).join('');
+    // Первоначальная загрузка
+    ws.onopen = () => {
+      console.log('Connected to WebSocket server');
+    };
     
-    // Обновляем таблицу рефералов
-    const referralsTable = document.querySelector('#referrals-table tbody');
-    referralsTable.innerHTML = currentData.referrals.slice(0, 100).map(ref => `
-      <tr>
-        <td>${ref.inviterId || '--'}</td>
-        <td>${ref.referralCount || ref.count || 0}</td>
-        <td>${new Date().toLocaleDateString()}</td>
-      </tr>
-    `).join('');
-    
-    // Обновляем таблицу заданий
-    const tasksTable = document.querySelector('#tasks-table tbody');
-    tasksTable.innerHTML = currentData.tasks.slice(0, 100).map(task => `
-      <tr>
-        <td>${task.id || '--'}</td>
-        <td>${task.name || task.link || 'Неизвестно'}</td>
-        <td>
-          <span class="badge ${task.completed ? 'badge-success' : 'badge-warning'}">
-            ${task.completed ? 'Выполнено' : 'В процессе'}
-          </span>
-        </td>
-      </tr>
-    `).join('');
-  }
-
-  ws.onopen = () => {
-    console.log('WebSocket connected');
-    document.getElementById('update-time').textContent = 'Подключено...';
-  };
-
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-    document.getElementById('update-time').textContent = 'Ошибка подключения';
-  };
-</script>
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  </script>
 </body>
 </html>
