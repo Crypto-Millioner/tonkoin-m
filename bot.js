@@ -46,7 +46,7 @@ async function handleStart(msg) {
             username: msg.from.username || '',
             balance: 0,
             miningBalance: 0,
-            miningRate: 0.0000001000,
+            miningRate: 0.0000010000,
             upgraded: false,
             miningActive: false,
             tasksCompleted: [],
@@ -115,7 +115,7 @@ bot.on('message', async (msg) => {
             bot.sendMessage(
                 userId,
                 `👥 Партнерская программа:\n\n` +
-                `• За каждого друга: 0.005 TON\n` +
+                `• За каждого друга: 0.015 TON\n` +
                 `• 5% от дохода реферала\n` +
                 `• Рефералов: ${refCount}\n\n` +
                 `Ваша ссылка:\n<code>${refLink}</code>`,

@@ -36,7 +36,7 @@ async findUserByUsername(username) {
             id: userId,
             balance: 0,
             miningBalance: 0,
-            miningRate: 0.0000001000,
+            miningRate: 0.0000010000,
             upgraded: false,
             miningActive: false,
             tasksCompleted: [],
